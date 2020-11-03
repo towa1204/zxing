@@ -115,14 +115,19 @@ public final class Encoder {
     appendBytes(content, mode, dataBits, encoding);
 
     Version version;
+    // 型番を予め設定していた場合，if文の中へ
+    // 型番は予め設定されているものとして設計する
     if (hints != null && hints.containsKey(EncodeHintType.QR_VERSION)) {
+      // 型番を取得
       int versionNumber = Integer.parseInt(hints.get(EncodeHintType.QR_VERSION).toString());
       version = Version.getVersionForNumber(versionNumber);
+      // 入力文字数の制限は同じなので変えなくて良さそう
       int bitsNeeded = calculateBitsNeeded(mode, headerBits, dataBits, version);
       if (!willFit(bitsNeeded, version, ecLevel)) {
         throw new WriterException("Data too big for requested version");
       }
     } else {
+      // ここを通ることは想定していない
       version = recommendVersion(ecLevel, mode, headerBits, dataBits);
     }
 
@@ -130,10 +135,12 @@ public final class Encoder {
     headerAndDataBits.appendBitArray(headerBits);
     // Find "length" of main segment and write it
     int numLetters = mode == Mode.BYTE ? dataBits.getSizeInBytes() : content.length();
+    // versionから文字数指示子のビット数をとっているだけなので変えなくてよさそう
     appendLengthInfo(numLetters, version, mode, headerAndDataBits);
     // Put data together into the overall payload
     headerAndDataBits.appendBitArray(dataBits);
 
+    // 書き換える必要あり
     Version.ECBlocks ecBlocks = version.getECBlocksForLevel(ecLevel);
     int numDataBytes = version.getTotalCodewords() - ecBlocks.getTotalECCodewords();
 
@@ -141,6 +148,7 @@ public final class Encoder {
     terminateBits(numDataBytes, headerAndDataBits);
 
     // Interleave data bits with error correction code.
+    // 書き換える必要あり
     BitArray finalBits = interleaveWithECBytes(headerAndDataBits,
                                                version.getTotalCodewords(),
                                                numDataBytes,
@@ -164,11 +172,13 @@ public final class Encoder {
     }
 
     if (maskPattern == -1) {
+      // 変えなくてよさそう
       maskPattern = chooseMaskPattern(finalBits, ecLevel, version, matrix);
     }
     qrCode.setMaskPattern(maskPattern);
 
     // Build the matrix and set it to "qrCode".
+    // 変えなくてよさそう?
     MatrixUtil.buildMatrix(finalBits, ecLevel, version, maskPattern, matrix);
     qrCode.setMatrix(matrix);
 
@@ -334,6 +344,7 @@ public final class Encoder {
       }
     }
     // If we have more space, we'll fill the space with padding patterns defined in 8.4.9 (p.24).
+    // 埋め草コードの埋め込み書き換える必要あり
     int numPaddingBytes = numDataBytes - bits.getSizeInBytes();
     for (int i = 0; i < numPaddingBytes; ++i) {
       bits.appendBits((i & 0x01) == 0 ? 0xEC : 0x11, 8);
@@ -426,6 +437,7 @@ public final class Encoder {
     for (int i = 0; i < numRSBlocks; ++i) {
       int[] numDataBytesInBlock = new int[1];
       int[] numEcBytesInBlock = new int[1];
+      // 書き換える必要あり
       getNumDataBytesAndNumECBytesForBlockID(
           numTotalBytes, numDataBytes, numRSBlocks, i,
           numDataBytesInBlock, numEcBytesInBlock);
@@ -447,6 +459,7 @@ public final class Encoder {
     BitArray result = new BitArray();
 
     // First, place data blocks.
+    // 書き換える必要あり 符号長の比に基づいて埋め込む必要がある
     for (int i = 0; i < maxNumDataBytes; ++i) {
       for (BlockPair block : blocks) {
         byte[] dataBytes = block.getDataBytes();
@@ -456,6 +469,7 @@ public final class Encoder {
       }
     }
     // Then, place error correction blocks.
+    // 書き換える必要あり 符号長の比に基づいて埋め込む必要がある
     for (int i = 0; i < maxNumEcBytes; ++i) {
       for (BlockPair block : blocks) {
         byte[] ecBytes = block.getErrorCorrectionBytes();
