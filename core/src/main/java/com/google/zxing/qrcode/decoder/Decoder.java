@@ -25,6 +25,7 @@ import com.google.zxing.common.reedsolomon.GenericGF;
 import com.google.zxing.common.reedsolomon.ReedSolomonDecoder;
 import com.google.zxing.common.reedsolomon.ReedSolomonException;
 
+import java.util.ArrayList;
 import java.util.Map;
 
 /**
@@ -184,6 +185,82 @@ public final class Decoder {
     for (int i = 0; i < numDataCodewords; i++) {
       codewordBytes[i] = (byte) codewordsInts[i];
     }
+  }
+
+  //分割手法の関数 符号長，情報コード数を引数に与えて，同じパラメータを持つRSブロックの個数，n，kの二次元配列を返す
+  public static ArrayList<ArrayList<Integer>> nkDivision(int n,int k) {
+    ArrayList<ArrayList<Integer>> list = new ArrayList<ArrayList <Integer>>();
+
+    ArrayList<Integer> nArray = new ArrayList<Integer>();
+    ArrayList<Integer> kArray = new ArrayList<Integer>();
+
+    nArray.add(n);
+    kArray.add(k);
+
+    int cnt = 0;
+    int x = n;
+    int y = 0;
+
+    // x>155 のとき分割したRSブロックの符号長が155以下となるように
+    while (x > 155) {
+      y = nArray.size();
+      for (int i = (int) Math.pow(2,cnt) - 1; i < y; i++) {
+
+        if (nArray.get(i) % 2 == 0) {
+          nArray.add(nArray.get(i) / 2);
+          nArray.add(nArray.get(i) / 2);
+          x = nArray.get(i) / 2;
+        } else {
+          nArray.add(nArray.get(i) / 2);
+          nArray.add(nArray.get(i) / 2 + 1);
+          x = nArray.get(i) / 2 + 1;
+        }
+
+        if (kArray.get(i) % 2 == 0) {
+          kArray.add(kArray.get(i) / 2);
+          kArray.add(kArray.get(i) / 2);
+        } else {
+          kArray.add(kArray.get(i) / 2);
+          kArray.add(kArray.get(i) / 2 + 1);
+        }
+      }
+      cnt++;
+    }
+
+    ArrayList<Integer> cnArray = new ArrayList<Integer>();
+    ArrayList<Integer> ckArray = new ArrayList<Integer>();
+    ArrayList<Integer> cntNum = new ArrayList<Integer>();
+
+    //int z = 1;
+    for (int i = (int) Math.pow(2,cnt) - 1; i < nArray.size(); i++) {
+      //System.out.println(z+":("+nArray.get(i)+","+kArray.get(i)+")");
+      if (i == (int) Math.pow(2,cnt) - 1) {
+        cnArray.add(nArray.get(i));
+        ckArray.add(kArray.get(i));
+        cntNum.add(1);
+      } else {
+        boolean flag = true;
+        for (int j = 0; j < cnArray.size(); j++) {
+          if (cnArray.get(j).compareTo(nArray.get(i)) == 0 && ckArray.get(j).compareTo(kArray.get(i)) == 0) {
+            cntNum.set(j,cntNum.get(j) + 1);
+            flag = !flag;
+            break;
+          }
+        }
+        if (flag) {
+          cnArray.add(nArray.get(i));
+          ckArray.add(kArray.get(i));
+          cntNum.add(1);
+        }
+      }
+      //z++;
+    }
+
+    list.add(cntNum);
+    list.add(cnArray);
+    list.add(ckArray);
+
+    return list;
   }
 
 }
