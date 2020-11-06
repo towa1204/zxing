@@ -49,14 +49,16 @@ public final class NewVersion {
 
   private final NewECBlocks ecBlocks;
   private final int totalDataCodewords;
+  private final int totalCodewords;
 
-  NewVersion(int versionNumber,
+  public NewVersion(int versionNumber,
                      ErrorCorrectionLevel ecLevel,
                      int contentSize) {
 
-    this.totalDataCodewords = contentSize;
-
     int[] rsParam = getRSParam(versionNumber, ecLevel);
+
+    this.totalDataCodewords = contentSize;
+    this.totalCodewords = rsParam[0] + rsParam[2];
 
     if (rsParam[2] > 255) {
       ArrayList<ArrayList<Integer>> rsBlocksParam;
@@ -111,6 +113,10 @@ public final class NewVersion {
 
   public NewECBlocks getECBlocks() {
     return ecBlocks;
+  }
+
+  public int getTotalCodewords() {
+    return totalCodewords;
   }
 
   // クラスメソッド：指定した型番の総コード語数を取得

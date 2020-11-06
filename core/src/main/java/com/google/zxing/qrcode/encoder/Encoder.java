@@ -17,6 +17,7 @@
 package com.google.zxing.qrcode.encoder;
 
 import com.google.zxing.EncodeHintType;
+import com.google.zxing.FormatException;
 import com.google.zxing.WriterException;
 import com.google.zxing.common.BitArray;
 import com.google.zxing.common.CharacterSetECI;
@@ -24,6 +25,7 @@ import com.google.zxing.common.reedsolomon.GenericGF;
 import com.google.zxing.common.reedsolomon.ReedSolomonEncoder;
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel;
 import com.google.zxing.qrcode.decoder.Mode;
+import com.google.zxing.qrcode.decoder.NewVersion;
 import com.google.zxing.qrcode.decoder.Version;
 
 import java.io.UnsupportedEncodingException;
@@ -67,8 +69,9 @@ public final class Encoder {
    * @return {@link QRCode} representing the encoded QR code
    * @throws WriterException if encoding can't succeed, because of for example invalid content
    *   or configuration
+   * @throws FormatException format error
    */
-  public static QRCode encode(String content, ErrorCorrectionLevel ecLevel) throws WriterException {
+  public static QRCode encode(String content, ErrorCorrectionLevel ecLevel) throws WriterException, FormatException {
     return encode(content, ecLevel, null);
   }
 
@@ -115,11 +118,12 @@ public final class Encoder {
     appendBytes(content, mode, dataBits, encoding);
 
     Version version;
+    int versionNumber = 0; // あまりよくない
     // 型番を予め設定していた場合，if文の中へ
     // 型番は予め設定されているものとして設計する
     if (hints != null && hints.containsKey(EncodeHintType.QR_VERSION)) {
       // 型番を取得
-      int versionNumber = Integer.parseInt(hints.get(EncodeHintType.QR_VERSION).toString());
+      versionNumber = Integer.parseInt(hints.get(EncodeHintType.QR_VERSION).toString());
       version = Version.getVersionForNumber(versionNumber);
       // 入力文字数の制限は同じなので変えなくて良さそう
       int bitsNeeded = calculateBitsNeeded(mode, headerBits, dataBits, version);
@@ -140,19 +144,21 @@ public final class Encoder {
     // Put data together into the overall payload
     headerAndDataBits.appendBitArray(dataBits);
 
-    // 書き換える必要あり
     Version.ECBlocks ecBlocks = version.getECBlocksForLevel(ecLevel);
+    // numDataBytesは提案手法ではk'の上限の役割
     int numDataBytes = version.getTotalCodewords() - ecBlocks.getTotalECCodewords();
 
+    // content, mode, versionからk'を計算する k'<= numDataBytesであることも確認する
+    int kp = calcKP(content.length(), mode, versionNumber, numDataBytes);
+    NewVersion newVersion = new NewVersion(versionNumber, ecLevel, kp);
+
     // Terminate the bits properly.
-    terminateBits(numDataBytes, headerAndDataBits);
+    terminateBits(kp, headerAndDataBits);
 
     // Interleave data bits with error correction code.
     // 書き換える必要あり
     BitArray finalBits = interleaveWithECBytes(headerAndDataBits,
-                                               version.getTotalCodewords(),
-                                               numDataBytes,
-                                               ecBlocks.getNumBlocks());
+                                               newVersion);
 
     QRCode qrCode = new QRCode();
 
@@ -183,6 +189,75 @@ public final class Encoder {
     qrCode.setMatrix(matrix);
 
     return qrCode;
+  }
+
+  // 文字の長さとモード指定子，型番からk'を計算し返す関数
+  public static int calcKP(int contentSize, Mode mode, int versionNumber, int numDataBytes)
+      throws WriterException {
+    int charCountSize = mode.getCharacterCountBits(versionNumber);
+    int l = calcLSize(mode, contentSize, charCountSize);
+
+    int capacity = numDataBytes * 8;
+
+    // capacityをlが超えた場合の例外処理
+    if (l > capacity) {
+      throw new WriterException("Data too big");
+    }
+
+    //終端パターン
+    for (int i = 0; i < 4 && l < capacity; ++i) {
+      l++;
+    }
+
+    // 埋め草ビットの付加
+    // bitsのビット数が8の倍数かどうかをチェックして処理
+    // これで得られるlがk'となる
+    int numBitsInLastByte = l & 0x07;
+    if (numBitsInLastByte > 0) {
+      for (int i = numBitsInLastByte; i < 8; i++) {
+        l++;
+      }
+    }
+    return l / 8;
+  }
+
+  /*
+   * モード指定子と文字数指定子を与えるとl(埋め込む情報k'(byte)ー終端パターンー埋め草ビット)を求める関数
+   * charCountValue：文字数指定子の値
+   * charCountSize：文字数指定子のビット幅 */
+  private static int calcLSize(Mode mode, int charCountValue, int charCountSize) {
+
+   int l = 0;
+   int remainder = 0;
+   switch (mode) {
+
+     case NUMERIC:
+       switch (charCountValue % 3) {
+         case 0:
+           remainder = 0;
+           break;
+         case 1:
+           remainder = 4;
+           break;
+         case 2:
+           remainder = 7;
+           break;
+       }
+       l = 4 + charCountSize + 10 * (charCountValue / 3) + remainder;
+       break;
+     case ALPHANUMERIC:
+       l = 4 + charCountSize + 11 * (charCountValue / 2) + 6 * (charCountValue % 2);
+       break;
+     case BYTE:
+       l = 4 + charCountSize + 8 * charCountValue;
+       break;
+     case KANJI:
+       l = 4 + charCountSize + 13 * charCountValue;
+       break;
+     default:
+       System.out.println("バイト，数字，英数字，漢字以外のモードを選ばないでください");
+   }
+   return l;
   }
 
   /**
@@ -326,29 +401,27 @@ public final class Encoder {
   /**
    * Terminate bits as described in 8.4.8 and 8.4.9 of JISX0510:2004 (p.24).
    */
-  static void terminateBits(int numDataBytes, BitArray bits) throws WriterException {
-    int capacity = numDataBytes * 8;
+  static void terminateBits(int kp, BitArray bits) throws WriterException {
+    // bitsがk'になるように終端パターン埋め草ビットを埋め込む(本来逆の関係だけど)
+    int capacity = kp * 8;
     if (bits.getSize() > capacity) {
       throw new WriterException("data bits cannot fit in the QR Code" + bits.getSize() + " > " +
           capacity);
     }
+    // 終端パターン
     for (int i = 0; i < 4 && bits.getSize() < capacity; ++i) {
       bits.appendBit(false);
     }
     // Append termination bits. See 8.4.8 of JISX0510:2004 (p.24) for details.
     // If the last byte isn't 8-bit aligned, we'll add padding bits.
+    // 埋め草ビット
     int numBitsInLastByte = bits.getSize() & 0x07;
     if (numBitsInLastByte > 0) {
       for (int i = numBitsInLastByte; i < 8; i++) {
         bits.appendBit(false);
       }
     }
-    // If we have more space, we'll fill the space with padding patterns defined in 8.4.9 (p.24).
-    // 埋め草コードの埋め込み書き換える必要あり
-    int numPaddingBytes = numDataBytes - bits.getSizeInBytes();
-    for (int i = 0; i < numPaddingBytes; ++i) {
-      bits.appendBits((i & 0x01) == 0 ? 0xEC : 0x11, 8);
-    }
+    System.out.println("k' = " + bits.getSizeInBytes());
     if (bits.getSize() != capacity) {
       throw new WriterException("Bits size does not equal capacity");
     }
@@ -416,9 +489,12 @@ public final class Encoder {
    * "result". The interleave rule is complicated. See 8.6 of JISX0510:2004 (p.37) for details.
    */
   static BitArray interleaveWithECBytes(BitArray bits,
-                                        int numTotalBytes,
-                                        int numDataBytes,
-                                        int numRSBlocks) throws WriterException {
+                                        NewVersion newVersion) throws WriterException {
+
+    // numDataBytes = k'
+    int numDataBytes = newVersion.getTotalDataCodewords();
+    int numRSBlocks = newVersion.getECBlocks().getNumBlocks();
+    NewVersion.NewECB[] newEcb = newVersion.getECBlocks().getECBlocks();
 
     // "bits" must have "getNumDataBytes" bytes of data.
     if (bits.getSizeInBytes() != numDataBytes) {
@@ -434,27 +510,30 @@ public final class Encoder {
     // Since, we know the number of reedsolmon blocks, we can initialize the vector with the number.
     Collection<BlockPair> blocks = new ArrayList<>(numRSBlocks);
 
-    for (int i = 0; i < numRSBlocks; ++i) {
-      int[] numDataBytesInBlock = new int[1];
-      int[] numEcBytesInBlock = new int[1];
-      // 書き換える必要あり
-      getNumDataBytesAndNumECBytesForBlockID(
-          numTotalBytes, numDataBytes, numRSBlocks, i,
-          numDataBytesInBlock, numEcBytesInBlock);
+    for (int i = 0; i < newEcb.length; i++) {
+      for (int j = 0; j < newEcb[i].getCount(); j++) {
+        int numDataBytesInBlock = newEcb[i].getDataCodewords();
+        int numEcBytesInBlock = newEcb[i].getCodewords() - numDataBytesInBlock;
+        byte[] dataBytes = new byte[numDataBytesInBlock];
+        bits.toBytes(8 * dataBytesOffset, dataBytes, 0, numDataBytesInBlock);
+        byte[] ecBytes = generateECBytes(dataBytes, numEcBytesInBlock);
+        blocks.add(new BlockPair(dataBytes, ecBytes));
 
-      int size = numDataBytesInBlock[0];
-      byte[] dataBytes = new byte[size];
-      bits.toBytes(8 * dataBytesOffset, dataBytes, 0, size);
-      byte[] ecBytes = generateECBytes(dataBytes, numEcBytesInBlock[0]);
-      blocks.add(new BlockPair(dataBytes, ecBytes));
-
-      maxNumDataBytes = Math.max(maxNumDataBytes, size);
-      maxNumEcBytes = Math.max(maxNumEcBytes, ecBytes.length);
-      dataBytesOffset += numDataBytesInBlock[0];
+        maxNumDataBytes = Math.max(maxNumDataBytes, numDataBytesInBlock);
+        maxNumEcBytes = Math.max(maxNumEcBytes, ecBytes.length);
+        dataBytesOffset += numDataBytesInBlock;
+      }
     }
+    // いらなさそうな気もするけど一応
     if (numDataBytes != dataBytesOffset) {
       throw new WriterException("Data bytes does not match offset");
     }
+
+    /*
+     * インタリーブ配置
+     * 符号語を均等に分散させる必要があるが手法を考える
+     * には時間がかかりそうなのでとりあえず従来通りの配置の仕方
+     */
 
     BitArray result = new BitArray();
 
@@ -478,6 +557,8 @@ public final class Encoder {
         }
       }
     }
+
+    int numTotalBytes = newVersion.getTotalCodewords();
     if (numTotalBytes != result.getSizeInBytes()) {  // Should be same.
       throw new WriterException("Interleaving error: " + numTotalBytes + " and " +
           result.getSizeInBytes() + " differ.");

@@ -3,7 +3,7 @@ package com.google.zxing.qrcode.decoder;
 import org.junit.Assert;
 import org.junit.Test;
 
-public final class NewVersionTestCase extends Assert{
+public final class NewVersionTestCase extends Assert {
 
   @Test
   public void checkVersion1() {
@@ -18,7 +18,7 @@ public final class NewVersionTestCase extends Assert{
     System.out.println("totalN = " + totalCodewords);
     System.out.println("totalK = " + totalDataCodewords);
     System.out.println("numRSBlocks = " + numBlocks);
-    for(NewVersion.NewECB ecb : ecBlocks.getECBlocks()) {
+    for (NewVersion.NewECB ecb : ecBlocks.getECBlocks()) {
       System.out.println(ecb.getCount() + "×" +
     "(" + ecb.getCodewords() + "," + ecb.getDataCodewords() + ")");
     }
@@ -40,7 +40,7 @@ public final class NewVersionTestCase extends Assert{
     System.out.println("totalN = " + totalCodewords);
     System.out.println("totalK = " + totalDataCodewords);
     System.out.println("numRSBlocks = " + numBlocks);
-    for(NewVersion.NewECB ecb : ecBlocks.getECBlocks()) {
+    for (NewVersion.NewECB ecb : ecBlocks.getECBlocks()) {
       System.out.println(ecb.getCount() + "×" +
     "(" + ecb.getCodewords() + "," + ecb.getDataCodewords() + ")");
     }
@@ -62,7 +62,7 @@ public final class NewVersionTestCase extends Assert{
     System.out.println("totalN = " + totalCodewords);
     System.out.println("totalK = " + totalDataCodewords);
     System.out.println("numRSBlocks = " + numBlocks);
-    for(NewVersion.NewECB ecb : ecBlocks.getECBlocks()) {
+    for (NewVersion.NewECB ecb : ecBlocks.getECBlocks()) {
       System.out.println(ecb.getCount() + "×" +
     "(" + ecb.getCodewords() + "," + ecb.getDataCodewords() + ")");
     }

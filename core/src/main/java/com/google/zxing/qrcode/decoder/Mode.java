@@ -95,6 +95,19 @@ public enum Mode {
     return characterCountBitsForVersions[offset];
   }
 
+  // getCharacterCountBitsのオーバーロード
+  public int getCharacterCountBits(int versionNumber) {
+    int offset;
+    if (versionNumber <= 9) {
+      offset = 0;
+    } else if (versionNumber <= 26) {
+      offset = 1;
+    } else {
+      offset = 2;
+    }
+    return characterCountBitsForVersions[offset];
+  }
+
   public int getBits() {
     return bits;
   }
