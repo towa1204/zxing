@@ -148,12 +148,11 @@ public final class Encoder {
     // numDataBytesは提案手法ではk'の上限の役割
     int numDataBytes = version.getTotalCodewords() - ecBlocks.getTotalECCodewords();
 
-    // content, mode, versionからk'を計算する k'<= numDataBytesであることも確認する
-    int kp = calcKP(content.length(), mode, versionNumber, numDataBytes);
-    NewVersion newVersion = new NewVersion(versionNumber, ecLevel, kp);
-
     // Terminate the bits properly.
-    terminateBits(kp, headerAndDataBits);
+    terminateBits(numDataBytes, headerAndDataBits);
+    // headerAndDataBits.getSizeInBytes() = k'
+    NewVersion newVersion = new NewVersion(versionNumber, ecLevel,
+                                           headerAndDataBits.getSizeInBytes());
 
     // Interleave data bits with error correction code.
     // 書き換える必要あり
@@ -189,75 +188,6 @@ public final class Encoder {
     qrCode.setMatrix(matrix);
 
     return qrCode;
-  }
-
-  // 文字の長さとモード指定子，型番からk'を計算し返す関数
-  public static int calcKP(int contentSize, Mode mode, int versionNumber, int numDataBytes)
-      throws WriterException {
-    int charCountSize = mode.getCharacterCountBits(versionNumber);
-    int l = calcLSize(mode, contentSize, charCountSize);
-
-    int capacity = numDataBytes * 8;
-
-    // capacityをlが超えた場合の例外処理
-    if (l > capacity) {
-      throw new WriterException("Data too big");
-    }
-
-    //終端パターン
-    for (int i = 0; i < 4 && l < capacity; ++i) {
-      l++;
-    }
-
-    // 埋め草ビットの付加
-    // bitsのビット数が8の倍数かどうかをチェックして処理
-    // これで得られるlがk'となる
-    int numBitsInLastByte = l & 0x07;
-    if (numBitsInLastByte > 0) {
-      for (int i = numBitsInLastByte; i < 8; i++) {
-        l++;
-      }
-    }
-    return l / 8;
-  }
-
-  /*
-   * モード指定子と文字数指定子を与えるとl(埋め込む情報k'(byte)ー終端パターンー埋め草ビット)を求める関数
-   * charCountValue：文字数指定子の値
-   * charCountSize：文字数指定子のビット幅 */
-  private static int calcLSize(Mode mode, int charCountValue, int charCountSize) {
-
-   int l = 0;
-   int remainder = 0;
-   switch (mode) {
-
-     case NUMERIC:
-       switch (charCountValue % 3) {
-         case 0:
-           remainder = 0;
-           break;
-         case 1:
-           remainder = 4;
-           break;
-         case 2:
-           remainder = 7;
-           break;
-       }
-       l = 4 + charCountSize + 10 * (charCountValue / 3) + remainder;
-       break;
-     case ALPHANUMERIC:
-       l = 4 + charCountSize + 11 * (charCountValue / 2) + 6 * (charCountValue % 2);
-       break;
-     case BYTE:
-       l = 4 + charCountSize + 8 * charCountValue;
-       break;
-     case KANJI:
-       l = 4 + charCountSize + 13 * charCountValue;
-       break;
-     default:
-       System.out.println("バイト，数字，英数字，漢字以外のモードを選ばないでください");
-   }
-   return l;
   }
 
   /**
@@ -401,9 +331,9 @@ public final class Encoder {
   /**
    * Terminate bits as described in 8.4.8 and 8.4.9 of JISX0510:2004 (p.24).
    */
-  static void terminateBits(int kp, BitArray bits) throws WriterException {
-    // bitsがk'になるように終端パターン埋め草ビットを埋め込む(本来逆の関係だけど)
-    int capacity = kp * 8;
+  static void terminateBits(int numDataBytes, BitArray bits) throws WriterException {
+    // numDataBytesが型番・誤り訂正レベルにおける情報コードの上限の役割
+    int capacity = numDataBytes * 8;
     if (bits.getSize() > capacity) {
       throw new WriterException("data bits cannot fit in the QR Code" + bits.getSize() + " > " +
           capacity);
@@ -420,10 +350,6 @@ public final class Encoder {
       for (int i = numBitsInLastByte; i < 8; i++) {
         bits.appendBit(false);
       }
-    }
-    System.out.println("k' = " + bits.getSizeInBytes());
-    if (bits.getSize() != capacity) {
-      throw new WriterException("Bits size does not equal capacity");
     }
   }
 
@@ -491,10 +417,17 @@ public final class Encoder {
   static BitArray interleaveWithECBytes(BitArray bits,
                                         NewVersion newVersion) throws WriterException {
 
-    // numDataBytes = k'
+    // numDataBytes = k' に注意
     int numDataBytes = newVersion.getTotalDataCodewords();
     int numRSBlocks = newVersion.getECBlocks().getNumBlocks();
     NewVersion.NewECB[] newEcb = newVersion.getECBlocks().getECBlocks();
+
+    // debug用
+    System.out.println("k' = " + numDataBytes);
+    for (NewVersion.NewECB ecb : newEcb) {
+      System.out.println(ecb.getCount() + "×" +
+    "(" + ecb.getCodewords() + "," + ecb.getDataCodewords() + ")");
+    }
 
     // "bits" must have "getNumDataBytes" bytes of data.
     if (bits.getSizeInBytes() != numDataBytes) {
