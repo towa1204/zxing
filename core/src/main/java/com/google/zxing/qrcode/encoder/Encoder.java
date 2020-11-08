@@ -30,7 +30,6 @@ import com.google.zxing.qrcode.decoder.Version;
 
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Map;
 
 /**
@@ -441,7 +440,8 @@ public final class Encoder {
     int maxNumEcBytes = 0;
 
     // Since, we know the number of reedsolmon blocks, we can initialize the vector with the number.
-    Collection<BlockPair> blocks = new ArrayList<>(numRSBlocks);
+    // collectionだと用途が限られるのでArrayListへ変更
+    ArrayList<BlockPair> blocks = new ArrayList<>(numRSBlocks);
 
     for (int i = 0; i < newEcb.length; i++) {
       for (int j = 0; j < newEcb[i].getCount(); j++) {
@@ -462,32 +462,67 @@ public final class Encoder {
       throw new WriterException("Data bytes does not match offset");
     }
 
-    /*
-     * インタリーブ配置
-     * 符号語を均等に分散させる必要があるが手法を考える
-     * には時間がかかりそうなのでとりあえず従来通りの配置の仕方
-     */
-
     BitArray result = new BitArray();
+    // 共通RSブロックの格納位置を格納した配列
+    int commonRSBlockCodewords = newVersion.getECBlocks().getECBlocks()[0].getCodewords();
+    int[] commonRSBlockIndex = getCommonRSBlockIndex(
+        commonRSBlockCodewords, newVersion.getTotalCodewords() - commonRSBlockCodewords);
+    // ループ回数
+    int loopNum = 0;
+    int commonRSBlockOffset = 0;
+    // 共通RSブロックの情報コード部の大きさ
+    int commonDataBytesLength = blocks.get(0).getDataBytes().length;
 
-    // First, place data blocks.
-    // 書き換える必要あり 符号長の比に基づいて埋め込む必要がある
-    for (int i = 0; i < maxNumDataBytes; ++i) {
-      for (BlockPair block : blocks) {
-        byte[] dataBytes = block.getDataBytes();
-        if (i < dataBytes.length) {
-          result.appendBits(dataBytes[i], 8);
-        }
+    // 共通RSブロックのバイト列をcommonRSByteにまとめる
+    byte[] commonRSByte = new byte[commonRSBlockCodewords];
+    for (int i = 0; i < commonRSBlockCodewords; i++) {
+      if (i < commonDataBytesLength) {
+        commonRSByte[i] = blocks.get(0).getDataBytes()[i];
+      } else {
+        commonRSByte[i] = blocks.get(0).getErrorCorrectionBytes()[i - commonDataBytesLength];
       }
     }
-    // Then, place error correction blocks.
-    // 書き換える必要あり 符号長の比に基づいて埋め込む必要がある
-    for (int i = 0; i < maxNumEcBytes; ++i) {
-      for (BlockPair block : blocks) {
-        byte[] ecBytes = block.getErrorCorrectionBytes();
-        if (i < ecBytes.length) {
-          result.appendBits(ecBytes[i], 8);
+
+    // 共通RSブロックと情報コード部を埋め込む処理
+    for (int i = 0; i < maxNumDataBytes; i++) {
+      for (int j = 1; j < blocks.size(); j++) {
+        // 共通RSブロックのバイトを置く位置とループ回数が一致したとき
+        if (commonRSBlockIndex[commonRSBlockOffset] == loopNum) {
+          // 共通RSBlockを代入
+//          // debug
+//          System.out.println("commonRSBlockOffset = " + commonRSBlockOffset);
+          result.appendBits(commonRSByte[commonRSBlockOffset++], 8);
+          // jをやり直す その他のRSブロックのj番目を飛ばさないように
+          j--;
+        } else {
+          // その他RSBlockを代入
+          byte[] dataBytes = blocks.get(j).getDataBytes();
+          if (i < dataBytes.length) {
+            result.appendBits(dataBytes[i], 8);
+          }
         }
+        loopNum++;
+      }
+    }
+
+    // 共通RSブロックと誤り訂正コード部を埋め込む処理
+    for (int i = 0; i < maxNumEcBytes; i++) {
+      for (int j = 1; j < blocks.size(); j++) {
+        if (commonRSBlockOffset < commonRSBlockIndex.length &&
+            commonRSBlockIndex[commonRSBlockOffset] == loopNum) {
+//          // 共通RSBlockを代入
+//          System.out.println("commonRSBlockOffset = " + commonRSBlockOffset);
+          result.appendBits(commonRSByte[commonRSBlockOffset++], 8);
+          // jをやり直す その他のRSブロックのj番目を飛ばさないように
+          j--;
+        } else {
+          // その他RSBlockを代入
+          byte[] ecBytes = blocks.get(j).getErrorCorrectionBytes();
+          if (i < ecBytes.length) {
+            result.appendBits(ecBytes[i], 8);
+          }
+        }
+        loopNum++;
       }
     }
 
@@ -498,6 +533,61 @@ public final class Encoder {
     }
 
     return result;
+  }
+
+  // 共通RSブロックの符号長とその他のRSブロックの符号長の総和を与えて
+  // 共通RSブロックを埋め込む位置を格納した配列を返す関数
+  // かなり効率の悪いアルゴリズムなのでリファクタリング必要
+  public static int[] getCommonRSBlockIndex(int num1, int num2) {
+    // 小さい方をnum1, 大きい方をnum2とする
+    if (num1 > num2) {
+      int swap = num1;
+      num1 = num2;
+      num2 = swap;
+    }
+    // num1とnum2の最大公約数を求める
+    int gcd = gcd(num1,num2);
+    // num1, num2を最大公約数で割った数をα, βとする
+    int alpha = num1 / gcd;
+    int beta = num2 / gcd;
+
+    // β = q * α + r (r < α)
+    // 1 : q (余りr)となる
+    int quotient = beta / alpha;
+    int remainder = beta % alpha;
+
+    // gcd * alpha = num1 回, 1 + q + sw 個出力する
+    int codewordsOffset = 0;
+    int loopNum = 0;
+    int[] commonRSBlockIndex = new int[num1];
+    for (int g = 0; g < gcd; g++) {
+      int sw = remainder == 0 ? 0 : 1;
+      for (int i = 0; i < alpha; i++) {
+        for (int j = 0; j < (quotient + 1) + sw; j++) {
+          if (j == 0) {
+            // 共通RSブロックを出力
+            commonRSBlockIndex[codewordsOffset++] = loopNum;
+          }
+          loopNum++;
+        }
+        if (i + 1 == remainder) {
+          sw = 0;
+        }
+      }
+    }
+//    // debug
+//    System.out.println("loopNum = " + loopNum);
+//    for (int i = 0; i < commonRSBlockIndex.length; i++) {
+//      System.out.println("[" + i + "] = " + commonRSBlockIndex[i]);
+//    }
+    return commonRSBlockIndex;
+  }
+
+  public static int gcd(int a, int b) {
+    if (b == 0) {
+      return a;
+    }
+    return gcd(b, a % b);
   }
 
   static byte[] generateECBytes(byte[] dataBytes, int numEcBytesInBlock) {
