@@ -124,6 +124,31 @@ public final class NewVersion {
     return rsParamArray[versionNumber - 1][0][0] + rsParamArray[versionNumber - 1][0][2];
   }
 
+  // クラスメソッド：型番・誤り訂正レベルを指定して共通RSブロックの(n,k)パラメータを取得
+  public static int[] getCommonRSParam(int versionNumber, ErrorCorrectionLevel ecLevel) {
+    int ecLevelNum = getECLevelNum(ecLevel);
+    return rsParamArray[versionNumber - 1][ecLevelNum];
+  }
+
+  private static int getECLevelNum(ErrorCorrectionLevel ecLevel) {
+    int ecLevelNum = 0;
+    switch (ecLevel) {
+    case L:
+      ecLevelNum = 0;
+      break;
+    case M:
+      ecLevelNum = 1;
+      break;
+    case Q:
+      ecLevelNum = 2;
+      break;
+    case H:
+      ecLevelNum = 3;
+      break;
+    }
+    return ecLevelNum;
+  }
+
   public static final class NewECBlocks {
     private final NewECB[] ecBlocks;
 
@@ -172,24 +197,7 @@ public final class NewVersion {
 
   private static int[] getRSParam(int versionNumber,
                                     ErrorCorrectionLevel ecLevel) {
-
-    int ecLevelNum = 0;
-    switch (ecLevel) {
-    case L:
-      ecLevelNum = 0;
-      break;
-    case M:
-      ecLevelNum = 1;
-      break;
-    case Q:
-      ecLevelNum = 2;
-      break;
-    case H:
-      ecLevelNum = 3;
-      break;
-    }
-
-    return rsParamArray[versionNumber - 1][ecLevelNum];
+    return rsParamArray[versionNumber - 1][getECLevelNum(ecLevel)];
   }
 
 }
