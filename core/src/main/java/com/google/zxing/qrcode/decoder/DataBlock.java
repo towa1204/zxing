@@ -45,69 +45,72 @@ final class DataBlock {
    *         QR Code
    */
   static DataBlock[] getDataBlocks(byte[] rawCodewords,
-                                   Version version,
-                                   ErrorCorrectionLevel ecLevel) {
+                                   NewVersion newVersion,
+                                   int[] commonRSBlockIndex) {
 
-    if (rawCodewords.length != version.getTotalCodewords()) {
+    if (rawCodewords.length != newVersion.getTotalCodewords()) {
       throw new IllegalArgumentException();
     }
 
-    // Figure out the number and size of data blocks used by this version and
-    // error correction level
-    Version.ECBlocks ecBlocks = version.getECBlocksForLevel(ecLevel);
+    int numDataBytes = newVersion.getTotalDataCodewords();
+    int numRSBlock = newVersion.getECBlocks().getNumBlocks();
+    NewVersion.NewECB[] newEcb = newVersion.getECBlocks().getECBlocks();
 
-    // First count the total number of data blocks
-    int totalBlocks = 0;
-    Version.ECB[] ecBlockArray = ecBlocks.getECBlocks();
-    for (Version.ECB ecBlock : ecBlockArray) {
-      totalBlocks += ecBlock.getCount();
-    }
+    int maxNumDataBytes = 0;
+    int maxNumEcBytes = 0;
 
-    // Now establish DataBlocks of the appropriate size and number of data codewords
-    DataBlock[] result = new DataBlock[totalBlocks];
-    int numResultBlocks = 0;
-    for (Version.ECB ecBlock : ecBlockArray) {
-      for (int i = 0; i < ecBlock.getCount(); i++) {
-        int numDataCodewords = ecBlock.getDataCodewords();
-        int numBlockCodewords = ecBlocks.getECCodewordsPerBlock() + numDataCodewords;
-        result[numResultBlocks++] = new DataBlock(numDataCodewords, new byte[numBlockCodewords]);
+    DataBlock[] result = new DataBlock[numRSBlock];
+
+    // DataBlock[]のそれぞれの大きさを決める処理
+    int resultOffset = 0;
+    for (int i = 0; i < newEcb.length; i++) {
+      for (int j = 0; j < newEcb[i].getCount(); j++) {
+        int numDataBytesInBlock = newEcb[i].getDataCodewords();
+        int numEcBytesInBlock = newEcb[i].getCodewords() - numDataBytesInBlock;
+        result[resultOffset++] = new DataBlock(numDataBytesInBlock, new byte[newEcb[i].getCodewords()]);
+
+        maxNumDataBytes = Math.max(maxNumDataBytes, numDataBytesInBlock);
+        maxNumEcBytes = Math.max(maxNumEcBytes, numEcBytesInBlock);
       }
     }
 
-    // All blocks have the same amount of data, except that the last n
-    // (where n may be 0) have 1 more byte. Figure out where these start.
-    int shorterBlocksTotalCodewords = result[0].codewords.length;
-    int longerBlocksStartAt = result.length - 1;
-    while (longerBlocksStartAt >= 0) {
-      int numCodewords = result[longerBlocksStartAt].codewords.length;
-      if (numCodewords == shorterBlocksTotalCodewords) {
-        break;
+    int position = 0;
+    int commonRSBlockOffset = 0;
+    // 情報コード部を取り出す処理 共通RSブロックは取得しない
+    for (int i = 0; i < maxNumDataBytes; i++) {
+      for (int j = 1; j < result.length; j++) {
+        if (commonRSBlockIndex[commonRSBlockOffset]  == position) {
+          commonRSBlockOffset++;
+          position++;
+          // jをやり直す その他のRSブロックのj番目を飛ばさないように
+          j--;
+        } else {
+          if (i < result[j].getNumDataCodewords()) {
+            result[j].codewords[i] = rawCodewords[position];
+            position++;
+          }
+        }
       }
-      longerBlocksStartAt--;
     }
-    longerBlocksStartAt++;
 
-    int shorterBlocksNumDataCodewords = shorterBlocksTotalCodewords - ecBlocks.getECCodewordsPerBlock();
-    // The last elements of result may be 1 element longer;
-    // first fill out as many elements as all of them have
-    int rawCodewordsOffset = 0;
-    for (int i = 0; i < shorterBlocksNumDataCodewords; i++) {
-      for (int j = 0; j < numResultBlocks; j++) {
-        result[j].codewords[i] = rawCodewords[rawCodewordsOffset++];
+    // 誤り訂正コード部を取り出す処理 共通RSブロックは取得しない
+    for (int i = 0; i < maxNumEcBytes; i++) {
+      for (int j = 1; j < result.length; j++) {
+        if (commonRSBlockOffset < commonRSBlockIndex.length &&
+            commonRSBlockIndex[commonRSBlockOffset]  == position) {
+          commonRSBlockOffset++;
+          position++;
+          // jをやり直す その他のRSブロックのj番目を飛ばさないように
+          j--;
+        } else {
+          if (i < result[j].codewords.length - result[j].getNumDataCodewords()) {
+            result[j].codewords[i + result[j].getNumDataCodewords()] = rawCodewords[position];
+            position++;
+          }
+        }
       }
     }
-    // Fill out the last data block in the longer ones
-    for (int j = longerBlocksStartAt; j < numResultBlocks; j++) {
-      result[j].codewords[shorterBlocksNumDataCodewords] = rawCodewords[rawCodewordsOffset++];
-    }
-    // Now add in error correction blocks
-    int max = result[0].codewords.length;
-    for (int i = shorterBlocksNumDataCodewords; i < max; i++) {
-      for (int j = 0; j < numResultBlocks; j++) {
-        int iOffset = j < longerBlocksStartAt ? i : i + 1;
-        result[j].codewords[iOffset] = rawCodewords[rawCodewordsOffset++];
-      }
-    }
+
     return result;
   }
 
