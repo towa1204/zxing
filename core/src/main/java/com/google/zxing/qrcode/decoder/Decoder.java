@@ -24,6 +24,7 @@ import com.google.zxing.common.DecoderResult;
 import com.google.zxing.common.reedsolomon.GenericGF;
 import com.google.zxing.common.reedsolomon.ReedSolomonDecoder;
 import com.google.zxing.common.reedsolomon.ReedSolomonException;
+import com.google.zxing.qrcode.encoder.Encoder;
 
 import java.util.ArrayList;
 import java.util.Map;
@@ -135,24 +136,51 @@ public final class Decoder {
 
     // Read codewords
     byte[] codewords = parser.readCodewords();
+
+    // 型番・誤り訂正レベルごとのパラメータを得る
+    int[] commonRSParam = NewVersion.getCommonRSParam(version.getVersionNumber(), ecLevel);
+    // 共通RSブロックの位置を得る
+    int[] commonRSBlockIndex = Encoder.getCommonRSBlockIndex(commonRSParam[0], commonRSParam[2]);
+
+    byte[] commonRSBlockBytes = new byte[commonRSParam[0]];
+    // 共通RSブロックを取り出す
+    for (int i = 0; i < commonRSBlockIndex.length; i++) {
+      commonRSBlockBytes[i] = codewords[commonRSBlockIndex[i]];
+    }
+    // 共通RSブロックを誤り訂正
+    correctErrors(commonRSBlockBytes, commonRSParam[1]);
+    System.out.println("共通RSブロックの誤り訂正成功");
+
+    // 文字数k'(contentSize)を取得
+    int kp = DecodedBitStreamParser.readStrFormatReturnKP(commonRSBlockBytes, version, ecLevel);
+    System.out.println("k' = " + kp);
+
+    NewVersion newVersion = new NewVersion(version.getVersionNumber(), ecLevel, kp);
+
+    // その他のRSブロックをDataBlock[]型として得る
     // Separate into data blocks
-    DataBlock[] dataBlocks = DataBlock.getDataBlocks(codewords, version, ecLevel);
+    DataBlock[] dataBlocks = DataBlock.getDataBlocks(codewords, newVersion, commonRSBlockIndex);
 
     // Count total number of data bytes
-    int totalBytes = 0;
-    for (DataBlock dataBlock : dataBlocks) {
-      totalBytes += dataBlock.getNumDataCodewords();
-    }
+    int totalBytes = newVersion.getTotalDataCodewords();
     byte[] resultBytes = new byte[totalBytes];
     int resultOffset = 0;
 
     // Error-correct and copy data blocks together into a stream of bytes
-    for (DataBlock dataBlock : dataBlocks) {
-      byte[] codewordBytes = dataBlock.getCodewords();
-      int numDataCodewords = dataBlock.getNumDataCodewords();
+    // resultBytesは情報コードのみ
+
+    // 共通RSブロックを格納
+    for (int i = 0; i < commonRSParam[1]; i++) {
+      resultBytes[resultOffset++] = commonRSBlockBytes[i];
+    }
+
+    // その他のRSブロックを誤り訂正，格納
+    for (int i = 1; i < dataBlocks.length; i++) {
+      byte[] codewordBytes = dataBlocks[i].getCodewords();
+      int numDataCodewords = dataBlocks[i].getNumDataCodewords();
       correctErrors(codewordBytes, numDataCodewords);
-      for (int i = 0; i < numDataCodewords; i++) {
-        resultBytes[resultOffset++] = codewordBytes[i];
+      for (int j = 0; j < numDataCodewords; j++) {
+        resultBytes[resultOffset++] = codewordBytes[j];
       }
     }
 
@@ -201,7 +229,7 @@ public final class Decoder {
     int x = n;
     int y = 0;
 
-    // x>155 のとき分割したRSブロックの符号長が155以下となるように
+    // x > 255 のとき分割したRSブロックの符号長が255以下となるように
     while (x > 155) {
       y = nArray.size();
       for (int i = (int) Math.pow(2,cnt) - 1; i < y; i++) {
