@@ -141,6 +141,110 @@ final class DecodedBitStreamParser {
                              parityData);
   }
 
+  /* モード指定子，文字数指定子を読み取りk'を返す関数
+   * 数字，英数字，バイト，漢字 以外のモードは読み取らない */
+  static int readStrFormatReturnKP(byte[] bytes, Version version, ErrorCorrectionLevel ecLevel)
+      throws FormatException {
+
+    BitSource bits = new BitSource(bytes);
+
+    Mode mode;
+    mode = Mode.forBits(bits.readBits(4)); // mode is encoded by 4 bits
+
+    // debug
+    // System.out.println("mode = " + mode);
+
+    // 文字数指定子のビット幅を求める
+    int charCountSize = mode.getCharacterCountBits(version);
+    // 文字数指定子の値を求める
+    int charCountValue = bits.readBits(mode.getCharacterCountBits(version));
+    int l = 0;
+
+    // debug
+    // System.out.println("CountSize = " + charCountSize + "，CountValue = " + charCountValue);
+
+    switch (mode) {
+      case NUMERIC:
+      case ALPHANUMERIC:
+      case BYTE:
+      case KANJI:
+        l = calcContentSize(mode, charCountValue, charCountSize);
+        break;
+      // 上の4つのモード以外は読み取らないものとする
+      default:
+        throw FormatException.getFormatInstance();
+    }
+
+    Version.ECBlocks ecBlocks = version.getECBlocksForLevel(ecLevel);
+    int numDataBytes = version.getTotalCodewords() - ecBlocks.getTotalECCodewords();
+
+    // k'を計算し返す
+    return calcKP(l,numDataBytes);
+  }
+
+  /*
+   * モード指定子と文字数指定子を与えるとl(埋め込む情報k'(byte)ー終端パターンー埋め草ビット)を求める関数
+   * charCountValue：文字数指定子の値
+   * charCountSize：文字数指定子のビット幅 */
+  private static int calcContentSize(Mode mode, int charCountValue, int charCountSize)
+     throws FormatException {
+
+   int l = 0;
+   int remainder = 0;
+   switch (mode) {
+
+     case NUMERIC:
+       switch (charCountValue % 3) {
+         case 0:
+           remainder = 0;
+           break;
+         case 1:
+           remainder = 4;
+           break;
+         case 2:
+           remainder = 7;
+           break;
+       }
+       l = 4 + charCountSize + 10 * (charCountValue / 3) + remainder;
+       break;
+     case ALPHANUMERIC:
+       l = 4 + charCountSize + 11 * (charCountValue / 2) + 6 * (charCountValue % 2);
+       break;
+     case BYTE:
+       l = 4 + charCountSize + 8 * charCountValue;
+       break;
+     case KANJI:
+       l = 4 + charCountSize + 13 * charCountValue;
+       break;
+     default:
+       throw FormatException.getFormatInstance();
+   }
+   return l;
+  }
+
+  // lからエンコード時の処理と同じように終端パターンと埋め草ビットの大きさを求めk'を得る関数
+  private static int calcKP(int l, int numDataBytes) {
+   int capacity = numDataBytes * 8;
+
+   // capacityをlが超えた場合の例外処理も後で書く
+
+   //終端パターン
+   for (int i = 0; i < 4 && l < capacity; ++i) {
+     l++;
+   }
+
+   // 埋め草ビットの付加
+   // bitsのビット数が8の倍数かどうかをチェックして処理
+   // これで得られるlがk'となる
+   int numBitsInLastByte = l & 0x07;
+   if (numBitsInLastByte > 0) {
+     for (int i = numBitsInLastByte; i < 8; i++) {
+       l++;
+     }
+   }
+   return l / 8;
+  }
+
   /**
    * See specification GBT 18284-2000
    */
