@@ -443,6 +443,7 @@ public final class Encoder {
     // collectionだと用途が限られるのでArrayListへ変更
     ArrayList<BlockPair> blocks = new ArrayList<>(numRSBlocks);
 
+    // 情報コードを取り出しRS符号化，情報コードと得た誤り訂正コードをBlockPair型として格納
     for (int i = 0; i < newEcb.length; i++) {
       for (int j = 0; j < newEcb[i].getCount(); j++) {
         int numDataBytesInBlock = newEcb[i].getDataCodewords();
@@ -467,8 +468,8 @@ public final class Encoder {
     int commonRSBlockCodewords = newVersion.getECBlocks().getECBlocks()[0].getCodewords();
     int[] commonRSBlockIndex = getCommonRSBlockIndex(
         commonRSBlockCodewords, newVersion.getTotalCodewords() - commonRSBlockCodewords);
-    // ループ回数
-    int loopNum = 0;
+    // バイト列から見た挿入箇所 最後は総コード語数になるはず
+    int position = 0;
     int commonRSBlockOffset = 0;
     // 共通RSブロックの情報コード部の大きさ
     int commonDataBytesLength = blocks.get(0).getDataBytes().length;
@@ -487,11 +488,12 @@ public final class Encoder {
     for (int i = 0; i < maxNumDataBytes; i++) {
       for (int j = 1; j < blocks.size(); j++) {
         // 共通RSブロックのバイトを置く位置とループ回数が一致したとき
-        if (commonRSBlockIndex[commonRSBlockOffset] == loopNum) {
+        if (commonRSBlockIndex[commonRSBlockOffset] == position) {
           // 共通RSBlockを代入
 //          // debug
 //          System.out.println("commonRSBlockOffset = " + commonRSBlockOffset);
           result.appendBits(commonRSByte[commonRSBlockOffset++], 8);
+          position++;
           // jをやり直す その他のRSブロックのj番目を飛ばさないように
           j--;
         } else {
@@ -499,9 +501,9 @@ public final class Encoder {
           byte[] dataBytes = blocks.get(j).getDataBytes();
           if (i < dataBytes.length) {
             result.appendBits(dataBytes[i], 8);
+            position++;
           }
         }
-        loopNum++;
       }
     }
 
@@ -509,10 +511,11 @@ public final class Encoder {
     for (int i = 0; i < maxNumEcBytes; i++) {
       for (int j = 1; j < blocks.size(); j++) {
         if (commonRSBlockOffset < commonRSBlockIndex.length &&
-            commonRSBlockIndex[commonRSBlockOffset] == loopNum) {
+            commonRSBlockIndex[commonRSBlockOffset] == position) {
 //          // 共通RSBlockを代入
 //          System.out.println("commonRSBlockOffset = " + commonRSBlockOffset);
           result.appendBits(commonRSByte[commonRSBlockOffset++], 8);
+          position++;
           // jをやり直す その他のRSブロックのj番目を飛ばさないように
           j--;
         } else {
@@ -520,12 +523,12 @@ public final class Encoder {
           byte[] ecBytes = blocks.get(j).getErrorCorrectionBytes();
           if (i < ecBytes.length) {
             result.appendBits(ecBytes[i], 8);
+            position++;
           }
         }
-        loopNum++;
       }
     }
-
+    System.out.println("position = " + position);
     int numTotalBytes = newVersion.getTotalCodewords();
     if (numTotalBytes != result.getSizeInBytes()) {  // Should be same.
       throw new WriterException("Interleaving error: " + numTotalBytes + " and " +
@@ -558,7 +561,7 @@ public final class Encoder {
 
     // gcd * alpha = num1 回, 1 + q + sw 個出力する
     int codewordsOffset = 0;
-    int loopNum = 0;
+    int position = 0;
     int[] commonRSBlockIndex = new int[num1];
     for (int g = 0; g < gcd; g++) {
       int sw = remainder == 0 ? 0 : 1;
@@ -566,9 +569,9 @@ public final class Encoder {
         for (int j = 0; j < (quotient + 1) + sw; j++) {
           if (j == 0) {
             // 共通RSブロックを出力
-            commonRSBlockIndex[codewordsOffset++] = loopNum;
+            commonRSBlockIndex[codewordsOffset++] = position;
           }
-          loopNum++;
+          position++;
         }
         if (i + 1 == remainder) {
           sw = 0;
@@ -576,7 +579,7 @@ public final class Encoder {
       }
     }
 //    // debug
-//    System.out.println("loopNum = " + loopNum);
+//    System.out.println("position = " + position);
 //    for (int i = 0; i < commonRSBlockIndex.length; i++) {
 //      System.out.println("[" + i + "] = " + commonRSBlockIndex[i]);
 //    }
