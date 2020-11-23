@@ -222,15 +222,20 @@ public final class Decoder {
     ArrayList<Integer> nArray = new ArrayList<Integer>();
     ArrayList<Integer> kArray = new ArrayList<Integer>();
 
-    nArray.add(n);
-    kArray.add(k);
+    if (k == 1 && n > 255) {
+      nArray.add(255);
+      kArray.add(k);
+    } else {
+      nArray.add(n);
+      kArray.add(k);
+    }
 
     int cnt = 0;
     int x = n;
     int y = 0;
 
     // x > 255 のとき分割したRSブロックの符号長が255以下となるように
-    while (x > 155) {
+    while (x > 155 && k != 1) {
       y = nArray.size();
       boolean flag = false;
       for (int i = (int) Math.pow(2,cnt) - 1; i < y; i++) {
@@ -283,7 +288,11 @@ public final class Decoder {
 
     for (int i = (int) Math.pow(2,cnt) - 1; i < nArray.size(); i++) {
       if (nArray.get(i) % 2 == 1) {
-        onArray.add(nArray.get(i));
+        if (nArray.get(i) > 255) {
+          onArray.add(255);
+        } else {
+          onArray.add(nArray.get(i));
+        }
       }
       if (kArray.get(i) % 2 == 1) {
         okArray.add(kArray.get(i));
