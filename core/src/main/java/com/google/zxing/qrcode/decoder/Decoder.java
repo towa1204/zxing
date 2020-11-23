@@ -232,6 +232,7 @@ public final class Decoder {
     // x > 255 のとき分割したRSブロックの符号長が255以下となるように
     while (x > 155) {
       y = nArray.size();
+      boolean flag = false;
       for (int i = (int) Math.pow(2,cnt) - 1; i < y; i++) {
 
         if (nArray.get(i) % 2 == 0) {
@@ -244,6 +245,7 @@ public final class Decoder {
           x = nArray.get(i) / 2 + 1;
         }
 
+        int knum = kArray.get(i) / 2;
         if (kArray.get(i) % 2 == 0) {
           kArray.add(kArray.get(i) / 2);
           kArray.add(kArray.get(i) / 2);
@@ -251,37 +253,69 @@ public final class Decoder {
           kArray.add(kArray.get(i) / 2);
           kArray.add(kArray.get(i) / 2 + 1);
         }
+        // 分割した値が1だったら分割を中止する
+        if (knum == 1) {
+            flag = true;
+        }
       }
       cnt++;
+      if (flag) {
+        break;
+      }
     }
 
+    // 得られた値を偶数ー奇数の順に並べる
+    ArrayList<Integer> onArray = new ArrayList<Integer>();
+    ArrayList<Integer> okArray = new ArrayList<Integer>();
+
+    for (int i = (int) Math.pow(2,cnt) - 1; i < nArray.size(); i++) {
+      if (nArray.get(i) % 2 == 0) {
+        if (nArray.get(i) > 255) {
+          onArray.add(255);
+        } else {
+          onArray.add(nArray.get(i));
+        }
+      }
+      if (kArray.get(i) % 2 == 0) {
+        okArray.add(kArray.get(i));
+      }
+    }
+
+    for (int i = (int) Math.pow(2,cnt) - 1; i < nArray.size(); i++) {
+      if (nArray.get(i) % 2 == 1) {
+        onArray.add(nArray.get(i));
+      }
+      if (kArray.get(i) % 2 == 1) {
+        okArray.add(kArray.get(i));
+      }
+    }
+
+    // debug
+    // for (int i = 0; i < onArray.size(); i++) {
+    //     System.out.println("onArray[" + i + "] = " + onArray.get(i));
+    //     System.out.println("okArray[" + i + "] = " + okArray.get(i));
+    // }
+
+
+    // count×(n,k)の形式にまとめる
     ArrayList<Integer> cnArray = new ArrayList<Integer>();
     ArrayList<Integer> ckArray = new ArrayList<Integer>();
     ArrayList<Integer> cntNum = new ArrayList<Integer>();
 
-    //int z = 1;
-    for (int i = (int) Math.pow(2,cnt) - 1; i < nArray.size(); i++) {
-      //System.out.println(z+":("+nArray.get(i)+","+kArray.get(i)+")");
-      if (i == (int) Math.pow(2,cnt) - 1) {
-        cnArray.add(nArray.get(i));
-        ckArray.add(kArray.get(i));
-        cntNum.add(1);
-      } else {
-        boolean flag = true;
-        for (int j = 0; j < cnArray.size(); j++) {
-          if (cnArray.get(j).compareTo(nArray.get(i)) == 0 && ckArray.get(j).compareTo(kArray.get(i)) == 0) {
-            cntNum.set(j,cntNum.get(j) + 1);
-            flag = !flag;
-            break;
-          }
-        }
-        if (flag) {
-          cnArray.add(nArray.get(i));
-          ckArray.add(kArray.get(i));
-          cntNum.add(1);
+    for (int i = 0; i < onArray.size(); i++) {
+      boolean flag = true;
+      for (int j = 0; j < cnArray.size(); j++) {
+        if (cnArray.get(j).compareTo(onArray.get(i)) == 0 && ckArray.get(j).compareTo(okArray.get(i)) == 0) {
+          cntNum.set(j, cntNum.get(j) + 1);
+          flag = false;
+          break;
         }
       }
-      //z++;
+      if (flag) {
+        cnArray.add(onArray.get(i));
+        ckArray.add(okArray.get(i));
+        cntNum.add(1);
+      }
     }
 
     list.add(cntNum);
