@@ -31,6 +31,7 @@ import com.google.zxing.qrcode.decoder.Version;
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.Map;
+import java.util.Random;
 
 /**
  * @author satorux@google.com (Satoru Takabayashi) - creator
@@ -186,7 +187,29 @@ public final class Encoder {
     MatrixUtil.buildMatrix(finalBits, ecLevel, version, maskPattern, matrix);
     qrCode.setMatrix(matrix);
 
+    // 誤りを付加するメソッドを置く
+
     return qrCode;
+  }
+
+  // 評価実験1 ランダム誤りを発生させるメソッド
+  public static void appendBitsError(ByteMatrix matrix) {
+    Random prob = new Random();
+    // 10％の確率
+    final int threshold = 10;
+    for (int i = 0; i < matrix.getHeight(); i++) {
+      for (int j = 0; j < matrix.getWidth(); j++) {
+        // 10％の確率で誤りを発生させる
+        if (prob.nextInt(100) < threshold) {
+          // i,jの位置にあるビットが0だったら1，1だったら0を代入
+          if (matrix.get(i, j) == 0) {
+            matrix.set(i, j, 1);
+          } else {
+            matrix.set(i, j, 0);
+          }
+        }
+      }
+    }
   }
 
   /**
