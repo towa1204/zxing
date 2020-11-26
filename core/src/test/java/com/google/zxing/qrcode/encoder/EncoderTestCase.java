@@ -38,6 +38,30 @@ import java.util.Map;
 public final class EncoderTestCase extends Assert {
 
   @Test
+  public void testAppendBitsError() {
+    ByteMatrix matrix = new ByteMatrix(10, 10);
+
+    for (int i = 0; i < matrix.getHeight(); i++) {
+      for (int j = 0; j < matrix.getWidth(); j++) {
+        if (i < 5) {
+          matrix.set(i, j, 1);
+        } else {
+          matrix.set(i, j, 0);
+        }
+
+      }
+    }
+    System.out.println("誤り付加前");
+    System.out.println(matrix);
+    System.out.println();
+
+    Encoder.appendBitsError(matrix);
+
+    System.out.println("誤り付加後");
+    System.out.println(matrix);
+  }
+
+  @Test
   public void testGetAlphanumericCode() {
     // The first ten code points are numbers.
     for (int i = 0; i < 10; ++i) {
