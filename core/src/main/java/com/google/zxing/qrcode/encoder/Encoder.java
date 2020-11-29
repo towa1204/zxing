@@ -187,7 +187,7 @@ public final class Encoder {
     MatrixUtil.buildMatrix(finalBits, ecLevel, version, maskPattern, matrix);
 
     // 誤りを付加するメソッドを置く
-    appendBitsError(matrix);
+//    appendBitsError(matrix);
 
     qrCode.setMatrix(matrix);
 
@@ -197,11 +197,10 @@ public final class Encoder {
   // 評価実験1 ランダム誤りを発生させるメソッド
   public static void appendBitsError(ByteMatrix matrix) {
     Random prob = new Random();
-    // 10％の確率
+    // 0.001％の確率
     final int threshold = 10;
     for (int i = 0; i < matrix.getHeight(); i++) {
       for (int j = 0; j < matrix.getWidth(); j++) {
-        // 10％の確率で誤りを発生させる
         if (prob.nextInt(10000) < threshold) {
           // i,jの位置にあるビットが0だったら1，1だったら0を代入
           if (matrix.get(i, j) == 0) {

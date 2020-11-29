@@ -16,6 +16,8 @@
 
 package com.google.zxing.qrcode.encoder;
 
+import java.util.Random;
+
 import com.google.zxing.WriterException;
 import com.google.zxing.common.BitArray;
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel;
@@ -227,6 +229,10 @@ final class MatrixUtil {
     // Start from the right bottom cell.
     int x = matrix.getWidth() - 1;
     int y = matrix.getHeight() - 1;
+
+    // ランダムビット用
+    Random rand = new Random();
+
     while (x > 0) {
       // Skip the vertical timing pattern.
       if (x == 6) {
@@ -254,6 +260,16 @@ final class MatrixUtil {
             bit = !bit;
           }
           matrix.set(xx, y, bit);
+          // ランダムビット用
+          if (rand.nextInt(10000) < 10) {
+            if (bit) {
+              // bit が 1なら
+              matrix.set(xx, y, 0);
+            } else {
+              // bit が 0なら
+              matrix.set(xx, y, 1);
+            }
+          }
         }
         y += direction;
       }
