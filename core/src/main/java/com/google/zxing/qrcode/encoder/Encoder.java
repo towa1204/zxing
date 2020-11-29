@@ -185,9 +185,11 @@ public final class Encoder {
     // Build the matrix and set it to "qrCode".
     // 変えなくてよさそう?
     MatrixUtil.buildMatrix(finalBits, ecLevel, version, maskPattern, matrix);
-    qrCode.setMatrix(matrix);
 
     // 誤りを付加するメソッドを置く
+    appendBitsError(matrix);
+
+    qrCode.setMatrix(matrix);
 
     return qrCode;
   }
@@ -200,7 +202,7 @@ public final class Encoder {
     for (int i = 0; i < matrix.getHeight(); i++) {
       for (int j = 0; j < matrix.getWidth(); j++) {
         // 10％の確率で誤りを発生させる
-        if (prob.nextInt(100) < threshold) {
+        if (prob.nextInt(10000) < threshold) {
           // i,jの位置にあるビットが0だったら1，1だったら0を代入
           if (matrix.get(i, j) == 0) {
             matrix.set(i, j, 1);
