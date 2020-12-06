@@ -95,6 +95,8 @@ final class BitMatrixParser {
    */
   Version readVersion() throws FormatException {
 
+//    System.out.println("point1.1.1");
+
     if (parsedVersion != null) {
       return parsedVersion;
     }
@@ -105,6 +107,8 @@ final class BitMatrixParser {
     if (provisionalVersion <= 6) {
       return Version.getVersionForNumber(provisionalVersion);
     }
+
+//    System.out.println("provisionalVersion = " + provisionalVersion);
 
     // Read top-right version info: 3 wide by 6 tall
     int versionBits = 0;
@@ -129,11 +133,16 @@ final class BitMatrixParser {
       }
     }
 
+//    System.out.println("point1.1.2");
+
     theParsedVersion = Version.decodeVersionInformation(versionBits);
     if (theParsedVersion != null && theParsedVersion.getDimensionForVersion() == dimension) {
       parsedVersion = theParsedVersion;
       return theParsedVersion;
     }
+
+//    System.out.println("point1.1.3");
+
     throw FormatException.getFormatInstance();
   }
 

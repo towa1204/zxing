@@ -135,7 +135,8 @@ final class MatrixUtil {
                           ErrorCorrectionLevel ecLevel,
                           Version version,
                           int maskPattern,
-                          ByteMatrix matrix) throws WriterException {
+                          ByteMatrix matrix,
+                          int errorProb) throws WriterException {
     clearMatrix(matrix);
     embedBasicPatterns(version, matrix);
     // Type information appear with any version.
@@ -143,7 +144,7 @@ final class MatrixUtil {
     // Version info appear if version >= 7.
     maybeEmbedVersionInfo(version, matrix);
     // Data should be embedded at end.
-    embedDataBits(dataBits, maskPattern, matrix);
+    embedDataBits(dataBits, maskPattern, matrix, errorProb);
   }
 
   // Embed basic patterns. On success, modify the matrix and return true.
@@ -222,7 +223,7 @@ final class MatrixUtil {
   // Embed "dataBits" using "getMaskPattern". On success, modify the matrix and return true.
   // For debugging purposes, it skips masking process if "getMaskPattern" is -1.
   // See 8.7 of JISX0510:2004 (p.38) for how to embed data bits.
-  static void embedDataBits(BitArray dataBits, int maskPattern, ByteMatrix matrix)
+  static void embedDataBits(BitArray dataBits, int maskPattern, ByteMatrix matrix, int errorProb)
       throws WriterException {
     int bitIndex = 0;
     int direction = -1;
@@ -261,7 +262,7 @@ final class MatrixUtil {
           }
           matrix.set(xx, y, bit);
           // ランダムビット用
-          if (rand.nextInt(10000) < 10) {
+          if (rand.nextInt(10000) < errorProb) {
             if (bit) {
               // bit が 1なら
               matrix.set(xx, y, 0);

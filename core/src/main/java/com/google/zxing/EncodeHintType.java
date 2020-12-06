@@ -115,4 +115,9 @@ public enum EncodeHintType {
    * {@link String } value).
    */
   GS1_FORMAT,
+
+  /**
+   * 誤りを発生させる確率
+   */
+  ERROR_PROB,
 }

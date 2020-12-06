@@ -182,12 +182,18 @@ public final class Encoder {
     }
     qrCode.setMaskPattern(maskPattern);
 
+    int hintErrorProb = -1;
+    if (hints != null && hints.containsKey(EncodeHintType.ERROR_PROB)) {
+      hintErrorProb = Integer.parseInt(hints.get(EncodeHintType.ERROR_PROB).toString());
+    }
+
     // Build the matrix and set it to "qrCode".
     // 変えなくてよさそう?
-    MatrixUtil.buildMatrix(finalBits, ecLevel, version, maskPattern, matrix);
+//    MatrixUtil.buildMatrix(finalBits, ecLevel, version, maskPattern, matrix, hintErrorProb);
+    MatrixUtil.buildMatrix(finalBits, ecLevel, version, maskPattern, matrix, -1);
 
     // 誤りを付加するメソッドを置く
-//    appendBitsError(matrix);
+    appendBitsError(matrix, hintErrorProb);
 
     qrCode.setMatrix(matrix);
 
@@ -195,13 +201,12 @@ public final class Encoder {
   }
 
   // 評価実験1 ランダム誤りを発生させるメソッド
-  public static void appendBitsError(ByteMatrix matrix) {
+  public static void appendBitsError(ByteMatrix matrix, int hintErrorProb) {
     Random prob = new Random();
-    // 0.001％の確率
-    final int threshold = 10;
+
     for (int i = 0; i < matrix.getHeight(); i++) {
       for (int j = 0; j < matrix.getWidth(); j++) {
-        if (prob.nextInt(10000) < threshold) {
+        if (prob.nextInt(10000) < hintErrorProb) {
           // i,jの位置にあるビットが0だったら1，1だったら0を代入
           if (matrix.get(i, j) == 0) {
             matrix.set(i, j, 1);
@@ -314,7 +319,7 @@ public final class Encoder {
     int bestMaskPattern = -1;
     // We try all mask patterns to choose the best one.
     for (int maskPattern = 0; maskPattern < QRCode.NUM_MASK_PATTERNS; maskPattern++) {
-      MatrixUtil.buildMatrix(bits, ecLevel, version, maskPattern, matrix);
+      MatrixUtil.buildMatrix(bits, ecLevel, version, maskPattern, matrix, -1);
       int penalty = calculateMaskPenalty(matrix);
       if (penalty < minPenalty) {
         minPenalty = penalty;
@@ -446,11 +451,11 @@ public final class Encoder {
     NewVersion.NewECB[] newEcb = newVersion.getECBlocks().getECBlocks();
 
     // debug用
-    System.out.println("k' = " + numDataBytes);
-    for (NewVersion.NewECB ecb : newEcb) {
-      System.out.println(ecb.getCount() + "×" +
-    "(" + ecb.getCodewords() + "," + ecb.getDataCodewords() + ")");
-    }
+//    System.out.println("k' = " + numDataBytes);
+//    for (NewVersion.NewECB ecb : newEcb) {
+//      System.out.println(ecb.getCount() + "×" +
+//    "(" + ecb.getCodewords() + "," + ecb.getDataCodewords() + ")");
+//    }
 
     // "bits" must have "getNumDataBytes" bytes of data.
     if (bits.getSizeInBytes() != numDataBytes) {
@@ -552,7 +557,7 @@ public final class Encoder {
         }
       }
     }
-    System.out.println("position = " + position);
+//    System.out.println("position = " + position);
     int numTotalBytes = newVersion.getTotalCodewords();
     if (numTotalBytes != result.getSizeInBytes()) {  // Should be same.
       throw new WriterException("Interleaving error: " + numTotalBytes + " and " +

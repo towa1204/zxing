@@ -131,11 +131,21 @@ public final class Decoder {
 
   private DecoderResult decode(BitMatrixParser parser, Map<DecodeHintType,?> hints)
       throws FormatException, ChecksumException {
+
+//    System.out.println("point1");
+
     Version version = parser.readVersion();
+
+//    System.out.println("point1.1");
+
     ErrorCorrectionLevel ecLevel = parser.readFormatInformation().getErrorCorrectionLevel();
+
+//    System.out.println("point1.2");
 
     // Read codewords
     byte[] codewords = parser.readCodewords();
+
+//    System.out.println("point1.3");
 
     // 型番・誤り訂正レベルごとのパラメータを得る
     int[] commonRSParam = NewVersion.getCommonRSParam(version.getVersionNumber(), ecLevel);
@@ -149,11 +159,15 @@ public final class Decoder {
     }
     // 共通RSブロックを誤り訂正
     correctErrors(commonRSBlockBytes, commonRSParam[1]);
-    System.out.println("共通RSブロックの誤り訂正成功");
+//    System.out.println("共通RSブロックの誤り訂正成功");
+
+//    System.out.println("point2");
 
     // 文字数k'(contentSize)を取得
     int kp = DecodedBitStreamParser.readStrFormatReturnKP(commonRSBlockBytes, version, ecLevel);
-    System.out.println("k' = " + kp);
+//    System.out.println("k' = " + kp);
+
+//    System.out.println("point3");
 
     NewVersion newVersion = new NewVersion(version.getVersionNumber(), ecLevel, kp);
 
@@ -184,6 +198,7 @@ public final class Decoder {
       }
     }
 
+//    System.out.println("point4");
     // Decode the contents of that stream of bytes
     return DecodedBitStreamParser.decode(resultBytes, version, ecLevel, hints);
   }
