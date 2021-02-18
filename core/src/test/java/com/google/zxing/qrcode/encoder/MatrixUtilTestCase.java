@@ -193,7 +193,7 @@ public final class MatrixUtilTestCase extends Assert {
     MatrixUtil.clearMatrix(matrix);
     MatrixUtil.embedBasicPatterns(Version.getVersionForNumber(1), matrix);
     BitArray bits = new BitArray();
-    MatrixUtil.embedDataBits(bits, -1, matrix);
+    MatrixUtil.embedDataBits(bits, -1, matrix, -1);
     String expected =
         " 1 1 1 1 1 1 1 0 0 0 0 0 0 0 1 1 1 1 1 1 1\n" +
         " 1 0 0 0 0 0 1 0 0 0 0 0 0 0 1 0 0 0 0 0 1\n" +
@@ -234,7 +234,8 @@ public final class MatrixUtilTestCase extends Assert {
                            ErrorCorrectionLevel.H,
                            Version.getVersionForNumber(1),  // Version 1
                            3,  // Mask pattern 3
-                           matrix);
+                           matrix,
+                           -1);
     String expected =
         " 1 1 1 1 1 1 1 0 0 1 1 0 0 0 1 1 1 1 1 1 1\n" +
         " 1 0 0 0 0 0 1 0 0 0 0 0 0 0 1 0 0 0 0 0 1\n" +

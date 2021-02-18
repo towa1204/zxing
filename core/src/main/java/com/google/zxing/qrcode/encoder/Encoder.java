@@ -193,11 +193,144 @@ public final class Encoder {
     MatrixUtil.buildMatrix(finalBits, ecLevel, version, maskPattern, matrix, -1);
 
     // 誤りを付加するメソッドを置く
-    appendBitsError(matrix, hintErrorProb);
+//    appendBitsError(matrix, hintErrorProb);
+    appendStainError(matrix, hintErrorProb);
 
     qrCode.setMatrix(matrix);
 
     return qrCode;
+  }
+
+  public static void appendStainError(ByteMatrix matrix, int hintErrorProb) {
+    double c = (double) hintErrorProb / 100;
+    int rr = (int) Math.floor(Math.sqrt(c / Math.PI) * matrix.getHeight());
+    Random rand = new Random();
+
+    // points: 染みの外形の点を記録
+    ArrayList<GridChart> points = new ArrayList<GridChart>();
+    // 円の中心座標(p,q)
+    int p = rand.nextInt(matrix.getWidth());
+    int q = rand.nextInt(matrix.getHeight());
+
+    // 円を36点取る
+    for (int i = 0; i < 36; i++) {
+      double theta = Math.toRadians(i * 10);
+      int r = rr + (rand.nextInt(5) - 2);
+      int x = p + (int) Math.floor(r * Math.cos(theta));
+      int y = q + (int) Math.floor(r * Math.sin(theta));
+      points.add(new GridChart(x,y));
+    }
+
+    drawFillPolygon(matrix, points);
+
+  }
+
+  private static int[] getMaxMinY(ArrayList<GridChart> points, int qrSize) {
+    int maxY = -1;
+    int minY = qrSize;
+    for (int i = 0; i < points.size(); i++) {
+      maxY = Math.max(maxY, points.get(i).getY());
+      minY = Math.min(minY, points.get(i).getY());
+    }
+    return new int[] {maxY, minY};
+  }
+
+  private static void drawFillPolygon(ByteMatrix matrix, ArrayList<GridChart> points) {
+    //  Y_min, Y_maxを求める
+    int[] maxminY = getMaxMinY(points, matrix.getHeight());
+    //  System.out.println(maxminY[0] + " " + maxminY[1]);
+
+    //  Y_min ~ Y_max までループ
+    for (int i = maxminY[1]; i <= maxminY[0]; i++) {
+      ArrayList<GridChart> List = new ArrayList<GridChart>();
+      int xcnt = getInterSection(i, points, List);
+//      System.out.println(xcnt);
+      if (xcnt == -1) {
+        continue;
+      }
+
+    // 交点間を塗りつぶし
+      int v = 0;
+      for (int j = 0; j < xcnt - 1; j++) {
+        v += List.get(j).getY();
+        if (v == 0) {
+          continue;
+        }
+
+        for (int k = List.get(j).getX(); k <= List.get(j + 1).getX(); k++) {
+          matrix.set((i + matrix.getWidth()) % matrix.getWidth(), (k + matrix.getHeight()) % matrix.getHeight(), 1);
+        }
+      }
+    }
+  }
+
+  private static int getInterSection(int y, ArrayList<GridChart> points ,ArrayList<GridChart> List) {
+
+    for (int i = 0; i < points.size(); i++) {
+
+      GridChart pt1 = points.get(i);
+      GridChart pt2 = points.get((i + 1) % points.size());
+
+      // 辺pt1 - pt2
+
+      // 水平線は除外
+      if (pt1.getY() == pt2.getY()) {
+        continue;
+      }
+
+      /*
+       *       Y位置が現在の辺の終点と、次の辺の始点である場合および
+       *       両辺が上方向、または下方向の場合は交点から除外
+       */
+      if (y == pt2.getY()) {
+        // 次の辺の終点?
+        GridChart ptTmp = points.get((i + 2) % points.size());
+        if ((pt2.getY() - pt1.getY() < 0  && ptTmp.getY() - pt2.getY() < 0) ||
+            (pt2.getY() - pt1.getY() > 0 && ptTmp.getY() - pt2.getY() > 0)) {
+          continue;
+        }
+      }
+
+      // Yが下方向になるように入れ替え
+      int dir = (pt2.getY() - pt1.getY() > 0) ? 1 : -1;
+
+      if (pt1.getY() > pt2.getY()) {
+        GridChart ptTmp = pt1;
+        pt1 = pt2;
+        pt2 = ptTmp;
+      }
+
+      // Yが辺の範囲がであればはじく
+      if (y < pt1.getY() || y > pt2.getY()) {
+        continue;
+      }
+
+      // 交点追加
+      GridChart temp = new GridChart(
+          pt1.getX() + (y - pt1.getY()) * (pt2.getX() - pt1.getX()) / (pt2.getY() - pt1.getY()), dir);
+      List.add(temp);
+    }
+
+    if (List.size() == 0) {
+      return -1;
+    }
+
+    // 小さい順に並び替え
+    for (int i = 0; i < List.size() - 1; i++) {
+      int min_index = i;
+      for (int j = i + 1; j < List.size(); j++) {
+        if (List.get(j).getX() < List.get(min_index).getX()) {
+          min_index = j;
+        }
+        if (i != min_index) {
+          GridChart isTmp = List.get(i);
+          List.set(i, List.get(min_index));
+          List.set(min_index, isTmp);
+        }
+      }
+    }
+
+    return List.size();
   }
 
   // 評価実験1 ランダム誤りを発生させるメソッド

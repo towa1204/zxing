@@ -55,7 +55,7 @@ public final class EncoderTestCase extends Assert {
     System.out.println(matrix);
     System.out.println();
 
-    Encoder.appendBitsError(matrix);
+    // Encoder.appendBitsError(matrix);
 
     System.out.println("誤り付加後");
     System.out.println(matrix);
